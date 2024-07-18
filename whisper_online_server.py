@@ -6,6 +6,7 @@ import argparse
 import os
 import logging
 import numpy as np
+from llm_api import ChatBot
 
 logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser()
@@ -20,6 +21,9 @@ parser.add_argument("--warmup-file", type=str, dest="warmup_file",
 # options from whisper_online
 add_shared_args(parser)
 args = parser.parse_args()
+# args.min_chunk_size = 1.0
+args.model_dir = 'faster-whisper-medium'
+args.lan = 'zh'
 
 set_logging(args,logger,other="")
 
@@ -91,6 +95,8 @@ class ServerProcessor:
         self.min_chunk = min_chunk
 
         self.last_end = None
+        self.bot = ChatBot(2)
+        self.bot.initialize()
 
     def receive_audio_chunk(self):
         # receive all audio that is available by this time
@@ -127,7 +133,8 @@ class ServerProcessor:
 
             self.last_end = end
             print("%1.0f %1.0f %s" % (beg,end,o[2]),flush=True,file=sys.stderr)
-            return "%1.0f %1.0f %s" % (beg,end,o[2])
+            return "%s" % (o[2])
+            # return "%1.0f %1.0f %s" % (beg,end,o[2])
         else:
             logger.debug("No text in this segment")
             return None
@@ -135,7 +142,9 @@ class ServerProcessor:
     def send_result(self, o):
         msg = self.format_output_transcript(o)
         if msg is not None:
-            self.connection.send(msg)
+            self.connection.send("用户："+msg)
+            result = self.bot.send_message(msg)
+            self.connection.send("机器人："+result)
 
     def process(self):
         # handle one client connection
